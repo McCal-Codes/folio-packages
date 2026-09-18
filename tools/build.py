@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Builds the site Folio reads: a package file per folder, an index that pins them, and a signed pointer to it.
 
-    python3 tools/build.py                 # build site/ without signing (what a pull request gets)
-    python3 tools/build.py --key key.pem   # build and sign, which is what CI does with the repo's secret
+    python3 tools/build.py                        # build site/ without signing (what a pull request gets)
+    python3 tools/build.py --key key.pem          # build and sign the index, which is what CI does
+    python3 tools/build.py --author-keys authors  # also sign each package as its author
 
 The result is `site/`, ready to serve:
 
@@ -12,6 +13,12 @@ The result is `site/`, ready to serve:
     site/key.pub           the public key, base64 SPKI, shown to the user as a fingerprint
     site/packages/*.foliopkg
     site/assets/<id>/...   the pictures each package names
+
+**Two different signatures.** `--key` signs the index: "this list came from this repo, unchanged". `--author-keys`
+points at a folder of per-package keys (`authors/<package-id>.pem`) and signs each package as its author: "this is
+the package that author published, byte for byte". Folio pins an author key to a package id the first time it sees
+one, so a mirror can carry a package but can't alter it or publish under its author's name. Author keys belong to
+authors and should never live in this repo; for a package McCal maintains, keep the key offline like the repo key.
 
 This is a stand-in for `folio-pkg`, the Kotlin tool that will share the app's own parser. It does the mechanical part
 faithfully - the same zip layout, the same hashes, the same signature - and leaves real validation to CI and the app.
@@ -47,6 +54,23 @@ IN_PACKAGE = {"manifest.json", "depiction.json", "tweaks.json", "theme.json", "l
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def sign_as_author(key: pathlib.Path, package_id: str, version: str, digest: str) -> dict:
+    """The author's signature over the package's identity bound to its bytes, which is what Folio checks."""
+    payload = f"folio-pkg:{package_id}:{version}:{digest}"
+    signature = subprocess.run(
+        ["openssl", "dgst", "-sha256", "-sign", str(key)],
+        input=payload.encode(), check=True, capture_output=True,
+    ).stdout
+    spki = subprocess.run(
+        ["openssl", "ec", "-in", str(key), "-pubout", "-outform", "DER"],
+        check=True, capture_output=True,
+    ).stdout
+    return {
+        "key": base64.b64encode(spki).decode(),
+        "signature": base64.b64encode(signature).decode(),
+    }
 
 
 def text_of(value) -> str:
@@ -89,7 +113,7 @@ def rewrite_depiction(depiction: dict, package_id: str) -> dict:
     return depiction
 
 
-def build() -> dict:
+def build(author_keys: pathlib.Path | None = None) -> dict:
     if SITE.exists():
         shutil.rmtree(SITE)
     (SITE / "packages").mkdir(parents=True)
@@ -118,15 +142,21 @@ def build() -> dict:
             (SITE / "assets" / package_id).mkdir(parents=True, exist_ok=True)
             (SITE / "assets" / package_id / "depiction.json").write_text(json.dumps(depiction, indent=2))
 
-        entries.append({
+        digest = sha256(data)
+        entry = {
             "id": package_id,
             "version": manifest["version"],
             "url": url,
-            "sha256": sha256(data),
+            "sha256": digest,
             "size": len(data),
             "manifest": manifest,
-        })
-        print(f"packed {package_id} {manifest['version']} ({len(data):,} bytes)")
+        }
+        author_key = author_keys / f"{package_id}.pem" if author_keys else None
+        if author_key and author_key.exists():
+            entry["signedBy"] = sign_as_author(author_key, package_id, manifest["version"], digest)
+        entries.append(entry)
+        signed = " · signed by its author" if "signedBy" in entry else ""
+        print(f"packed {package_id} {manifest['version']} ({len(data):,} bytes){signed}")
 
     index = {
         "format": 1,
@@ -181,9 +211,11 @@ def sign(entry: dict, key: pathlib.Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--key", type=pathlib.Path, help="private key in PEM form; without it the site is unsigned")
+    parser.add_argument("--author-keys", type=pathlib.Path,
+                        help="folder of <package-id>.pem keys, to sign each package as its author")
     args = parser.parse_args()
 
-    entry = build()
+    entry = build(args.author_keys)
     if args.key:
         sign(entry, args.key)
     else:

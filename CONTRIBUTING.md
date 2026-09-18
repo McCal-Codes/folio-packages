@@ -51,6 +51,29 @@ A repo that's worth finding can be listed in [`sources.md`](sources.md) with a p
 and a line about what's on it. Folio doesn't read that file — it's for people. A listed source is still added by hand
 and still shows its fingerprint, and being listed here isn't a review of what it contains.
 
+## Signing your package
+
+Optional, and worth doing if you plan to publish more than once.
+
+A repo signature says "this list came from this repo, unchanged". It says nothing about who wrote a package — so
+without an author signature, a mirror could carry your package and change it, and someone else could publish under
+your package's name. An author signature fixes both.
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout -out dev.you.your-package.pem   # once, keep it offline
+python3 tools/build.py --author-keys <folder holding that file>
+```
+
+Folio pins your key to your package id the first time it sees a signed copy, the way a phone pins an app's signing
+key. After that, a copy signed by anyone else is refused, altered bytes are refused, and an unsigned copy of a
+package that has always been signed is refused. Your package page says **signed by its developer**.
+
+Two things follow: **keep the key**, because a new one means your package can't update itself on phones that already
+have it, and **never commit it** — `.gitignore` covers `*.pem` and `authors/`, but that only helps if the key never
+reaches the repo in the first place.
+
+Unsigned packages are welcome too. Most first packages are, and Folio says so plainly rather than implying anything.
+
 ## Updating a package
 
 Raise the version and add a `changelog` entry saying what changed. The Market shows that entry as "What's new", so

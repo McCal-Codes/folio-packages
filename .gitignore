@@ -1,5 +1,6 @@
 site/
 *.pem
 *.key
+authors/
 __pycache__/
 .DS_Store
