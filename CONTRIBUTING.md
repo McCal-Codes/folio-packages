@@ -1,9 +1,34 @@
-# Contributing a package
+# Contributing
 
-A pull request adds one folder under `packages/`. CI runs the same checks the app does, and a person reads it before
-it goes in.
+There are two ways to get a package to people, and neither one needs permission from anyone.
 
-## What CI checks
+## 1. Run your own repository
+
+A source is static files on any HTTPS host: an index, a signed pointer to it, and a package file per package. That's
+all Folio reads, so GitHub Pages, a personal site or anything that serves files will do.
+
+1. Copy this repo — `tools/build.py`, the Action and `template/hello-tweak` are the whole machine.
+2. Make your key with `bash tools/keygen.sh` and put the private half in your repo's secrets as `FOLIO_SIGNING_KEY`.
+3. Push. The Action builds and signs your site, and your source's address is what people add in Folio.
+
+Your repo, your key, your rules about what you list — the same way Sileo repos work. Folio shows anyone adding your
+source its key fingerprint first, and pins it, so you never have to ask them to trust anything twice.
+
+Tell people how to add it:
+
+```
+Market → Sources → Add a source → https://<you>.github.io/<your-repo>/
+```
+
+## 2. Send it here
+
+This repo is the shared one, for people who'd rather not run a source. Open a pull request that adds one folder under
+`packages/`. Tweaks are welcome — a tweak package configures things Folio can already do, and its page says which
+ones — as are themes, layouts and wallpapers.
+
+CI runs the same checks the app does, and a person reads it before it goes in.
+
+### What CI checks
 
 - The manifest and depiction parse, and match the v1 schemas.
 - The id is reverse-DNS, lowercase and not already taken; the version follows dpkg ordering, and is higher than the
@@ -13,12 +38,18 @@ it goes in.
 - The packed `.foliopkg` is under 20 MB and contains no executable file.
 - Text is in English (`en`) at minimum; other languages are welcome beside it.
 
-## What a reviewer looks for
+### What a reviewer looks for
 
 - The description says what the package changes, in plain words, without marketing.
 - The screenshots are of the package, on a phone, not mockups or stock art.
 - Nothing claims to be by someone it isn't. A package that copies another's name or artwork is refused.
 - Credit where a tweak is inspired by an iOS jailbreak tweak, the way Folio credits its own.
+
+## Listing a source someone else runs
+
+A repo that's worth finding can be listed in [`sources.md`](sources.md) with a pull request: its address, who runs it,
+and a line about what's on it. Folio doesn't read that file — it's for people. A listed source is still added by hand
+and still shows its fingerprint, and being listed here isn't a review of what it contains.
 
 ## Updating a package
 
@@ -29,4 +60,7 @@ write it for the person deciding whether to update.
 
 Open an issue, or mail the address in the Folio repo. A package that is harmful, stolen or broken beyond repair is
 added to `revoked.json` with a reason: Folio then refuses to install it, says why on its page, and lets anyone who
-already has it remove it. Nothing is deleted quietly - a pulled package keeps its place with the reason showing.
+already has it remove it. Nothing is deleted quietly — a pulled package keeps its place with the reason showing.
+
+A source can be pulled the same way, by address. That only applies to sources listed here; one someone added by hand
+is theirs, and Folio never disables it behind their back.
