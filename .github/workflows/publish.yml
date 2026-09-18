@@ -25,18 +25,27 @@ jobs:
         run: python3 tools/build.py
 
       - name: Check every package against Folio's own schemas
+        env:
+          # The branch the schemas are read from. They arrive on main with Folio 0.7.0; until then this can be
+          # pointed at the release branch, and the step says so instead of failing.
+          FOLIO_REF: ${{ vars.FOLIO_REF || 'main' }}
         run: |
           pip install --quiet check-jsonschema
-          git clone --depth 1 https://github.com/McCal-Codes/folio.git /tmp/folio
+          git clone --depth 1 --branch "$FOLIO_REF" https://github.com/McCal-Codes/folio.git /tmp/folio
+          schema=/tmp/folio/docs/sdk/schema/v1
+          if [ ! -d "$schema" ]; then
+            echo "::notice::Folio $FOLIO_REF has no docs/sdk/schema/v1 yet, so packages were only built, not validated."
+            exit 0
+          fi
           for f in packages/*/manifest.json; do
             [ -e "$f" ] || continue
-            check-jsonschema --schemafile /tmp/folio/docs/sdk/schema/v1/manifest.schema.json "$f"
+            check-jsonschema --schemafile "$schema/manifest.schema.json" "$f"
           done
           for f in packages/*/depiction.json; do
             [ -e "$f" ] || continue
-            check-jsonschema --schemafile /tmp/folio/docs/sdk/schema/v1/depiction.schema.json "$f"
+            check-jsonschema --schemafile "$schema/depiction.schema.json" "$f"
           done
-          check-jsonschema --schemafile /tmp/folio/docs/sdk/schema/v1/index.schema.json site/index.json
+          check-jsonschema --schemafile "$schema/index.schema.json" site/index.json
 
       - name: Upload the site
         if: github.ref == 'refs/heads/main'
