@@ -1,0 +1,83 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # The index says how long it stays fresh, so it has to be rebuilt before it goes stale.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the site
+        run: python3 tools/build.py
+
+      - name: Check every package against Folio's own schemas
+        run: |
+          pip install --quiet check-jsonschema
+          git clone --depth 1 https://github.com/McCal-Codes/folio.git /tmp/folio
+          for f in packages/*/manifest.json; do
+            [ -e "$f" ] || continue
+            check-jsonschema --schemafile /tmp/folio/docs/sdk/schema/v1/manifest.schema.json "$f"
+          done
+          for f in packages/*/depiction.json; do
+            [ -e "$f" ] || continue
+            check-jsonschema --schemafile /tmp/folio/docs/sdk/schema/v1/depiction.schema.json "$f"
+          done
+          check-jsonschema --schemafile /tmp/folio/docs/sdk/schema/v1/index.schema.json site/index.json
+
+      - name: Upload the site
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-unsigned
+          path: site/
+
+  publish:
+    # Signing only ever happens on main: a pull request from anyone must not be able to reach the key.
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and sign
+        env:
+          FOLIO_SIGNING_KEY: ${{ secrets.FOLIO_SIGNING_KEY }}
+        run: |
+          if [ -z "$FOLIO_SIGNING_KEY" ]; then
+            echo "No FOLIO_SIGNING_KEY secret: run tools/keygen.sh and add it. Folio refuses an unsigned source." >&2
+            exit 1
+          fi
+          printf '%s' "$FOLIO_SIGNING_KEY" > key.pem
+          python3 tools/build.py --key key.pem
+          rm -f key.pem
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+      - id: deploy
+        uses: actions/deploy-pages@v4

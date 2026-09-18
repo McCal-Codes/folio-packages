@@ -1,0 +1,6 @@
+{
+  "$schema": "https://folio.mccal.dev/schema/v1/revoked.schema.json",
+  "format": 1,
+  "timestamp": 0,
+  "packages": []
+}

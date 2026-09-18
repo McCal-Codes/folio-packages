@@ -1,0 +1,18 @@
+{
+  "$schema": "https://folio.mccal.dev/schema/v1/manifest.schema.json",
+  "format": 1,
+  "id": "dev.example.hello-tweak",
+  "name": { "en": "Hello Tweak" },
+  "version": "1.0.0",
+  "author": { "name": "Your name", "url": "https://github.com/your-name" },
+  "minFolio": "0.7.0",
+  "section": "tweaks",
+  "kind": ["tweakBundle"],
+  "permissions": ["tweaks"],
+  "screens": ["cover", "inner"],
+  "icon": "assets/icon.png",
+  "depiction": "depiction.json",
+  "license": "MIT",
+  "description": { "en": "Turns on Folio's dock magnification. Copy this folder and make it yours." },
+  "requires": { "folio": "0.7.0", "features": ["tweaks.harborline"] }
+}

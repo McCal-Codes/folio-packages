@@ -1,0 +1,11 @@
+{
+  "$schema": "https://folio.mccal.dev/schema/v1/depiction.schema.json",
+  "format": 1,
+  "blocks": [
+    { "type": "hero", "image": "assets/hero.png" },
+    { "type": "screenshots", "images": ["assets/1.png", "assets/2.png"] },
+    { "type": "markdown", "text": { "en": "Say what it changes, in a sentence or two. This is the first thing anyone reads.\n\nA second paragraph can say what it deliberately leaves alone." } },
+    { "type": "featureList", "items": [{ "en": "One thing it does" }, { "en": "Another thing it does" }] },
+    { "type": "changelog", "entries": [{ "version": "1.0.0", "date": "2026-09-18", "notes": { "en": "First release." } }] }
+  ]
+}
