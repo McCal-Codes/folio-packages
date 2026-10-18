@@ -25,7 +25,20 @@ TEMPLATE_IDS = {"dev.example.hello-tweak"}
 ALLOWED_SUFFIXES = {".json", ".png", ".webp", ".jpg", ".jpeg"}
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_PACKAGE_BYTES = 20 * 1024 * 1024
-URL = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s\"']+", re.IGNORECASE)
+SCHEME = re.compile(r"^\s*([a-z][a-z0-9+.-]*):", re.IGNORECASE)
+
+
+def strings(value):
+    """Every string in a parsed JSON document, keys included, after JSON escapes are decoded."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            yield k
+            yield from strings(v)
+    elif isinstance(value, list):
+        for v in value:
+            yield from strings(v)
 
 
 def check(folder: pathlib.Path) -> list[str]:
@@ -59,9 +72,16 @@ def check(folder: pathlib.Path) -> list[str]:
         if size > MAX_FILE_BYTES:
             errors.append(f"{rel}: {size:,} bytes; each file must be under {MAX_FILE_BYTES:,}")
         if path.suffix.lower() == ".json":
-            for url in URL.findall(path.read_text(encoding="utf-8", errors="replace")):
-                if not url.lower().startswith("https://"):
-                    errors.append(f"{rel}: {url} must be an https:// link")
+            # Checked on the decoded values, not the file text: "http:\/\/" or a \u escape is still http to Folio.
+            try:
+                document = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                errors.append(f"{rel}: not valid JSON ({e})")
+                continue
+            for text in strings(document):
+                scheme = SCHEME.match(text)
+                if scheme and "//" in text[scheme.end():scheme.end() + 2] and scheme.group(1).lower() != "https":
+                    errors.append(f"{rel}: {text.strip()[:80]} must be an https:// link")
     if total > MAX_PACKAGE_BYTES:
         errors.append(f"{where}: {total:,} bytes in all; a package must stay under {MAX_PACKAGE_BYTES:,}")
     return errors
