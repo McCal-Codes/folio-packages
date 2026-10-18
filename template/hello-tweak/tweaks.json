@@ -1,4 +1,14 @@
 {
+  "$schema": "https://folio.mccal.dev/schema/v1/tweaks.schema.json",
   "format": 1,
-  "tweaks": [{ "id": "harborline", "on": true }]
+  "tweaks": [
+    {
+      "id": "dockMagnify",
+      "enabled": true,
+      "screens": {
+        "cover": true,
+        "inner": true
+      }
+    }
+  ]
 }

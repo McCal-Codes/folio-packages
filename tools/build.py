@@ -77,12 +77,20 @@ def text_of(value) -> str:
     return value if isinstance(value, str) else (value or {}).get("en", "")
 
 
-def pack(folder: pathlib.Path) -> bytes:
-    """Zips the files that belong inside a package. Pictures stay out: they're served from the site."""
+def pack(folder: pathlib.Path, manifest: dict) -> bytes:
+    """
+    Zips the files that belong inside a package. Pictures stay out: they're served from the site.
+
+    The manifest packed is the one the index carries, with its site paths, not the folder's file. Folio checks that
+    what is inside a package is what the index advertises, so the two have to be the same document.
+    """
     buffer = SITE / f".{folder.name}.zip"
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for name in sorted(p.name for p in folder.iterdir() if p.name in IN_PACKAGE):
-            zf.write(folder / name, name)
+            if name == "manifest.json":
+                zf.writestr(name, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+            else:
+                zf.write(folder / name, name)
     data = buffer.read_bytes()
     buffer.unlink()
     return data
@@ -130,7 +138,7 @@ def build(author_keys: pathlib.Path | None = None) -> dict:
         if "icon" in manifest:
             manifest["icon"] = site_path(package_id, manifest["icon"])
 
-        data = pack(folder)
+        data = pack(folder, manifest)
         url = f"packages/{package_id}_{manifest['version']}.foliopkg"
         (SITE / url).write_bytes(data)
         copy_pictures(folder, package_id)

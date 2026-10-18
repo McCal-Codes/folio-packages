@@ -30,13 +30,28 @@ CI runs the same checks the app does, and a person reads it before it goes in.
 
 ### What CI checks
 
-- The manifest and depiction parse, and match the v1 schemas.
-- The id is reverse-DNS, lowercase and not already taken; the version follows dpkg ordering, and is higher than the
-  one already published.
-- Only the capabilities Folio has, and only the permissions the manifest declares.
-- Pictures are png, webp or jpg, under 2 MB each; the icon is square and at least 180 px.
-- The packed `.foliopkg` is under 20 MB and contains no executable file.
-- Text is in English (`en`) at minimum; other languages are welcome beside it.
+Folio's own validator, pinned to a known Folio commit, checks each package on its own:
+
+- The manifest, depiction and tweaks parse and match the v1 schemas.
+- Only the capabilities Folio has, only the permissions the manifest declares, and no reserved kinds.
+- Every picture the manifest and depiction name is there.
+
+House rules (`tools/check-submission.py`) check what a schema can't:
+
+- The folder is named after the package id, and the id isn't the template's or in Folio's own `com.mccal.` namespace.
+- Only JSON and pictures (png, webp or jpg), each file under 2 MB and the package under 20 MB.
+- Every link is `https://`.
+
+On `main`, the signed site is checked again as a whole before it is published. Run the same checks yourself before
+opening a pull request:
+
+```sh
+python3 tools/check-submission.py
+python3 tools/build.py
+```
+
+Since each folder is named after its id, two packages can't share one. Not automatic yet, so a reviewer checks them:
+that the version is higher than the one already published, and that the icon is square and at least 180 px.
 
 ### What a reviewer looks for
 
