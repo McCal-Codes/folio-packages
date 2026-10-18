@@ -24,28 +24,35 @@ jobs:
       - name: Build the site
         run: python3 tools/build.py
 
-      - name: Check every package against Folio's own schemas
+      - name: Fetch Folio's validator and schemas, pinned
         env:
-          # The branch the schemas are read from. They arrive on main with Folio 0.7.0; until then this can be
-          # pointed at the release branch, and the step says so instead of failing.
-          FOLIO_REF: ${{ vars.FOLIO_REF || 'main' }}
+          # The exact Folio commit these checks are run against. Bump it on purpose (and the hash with it), so a
+          # submission that passed yesterday doesn't fail today because Folio's main moved.
+          FOLIO_SHA: 5bb87e66c9bcf9d0ae1324f5f6a9aa764c4c40ab
+          FOLIO_PKG_SHA256: e82b605b05b7626d138c0d24feda79f01235e38dad8c1ebb708a0af8c0337ba1
         run: |
-          pip install --quiet check-jsonschema
-          git clone --depth 1 --branch "$FOLIO_REF" https://github.com/McCal-Codes/folio.git /tmp/folio
-          schema=/tmp/folio/docs/sdk/schema/v1
-          if [ ! -d "$schema" ]; then
-            echo "::notice::Folio $FOLIO_REF has no docs/sdk/schema/v1 yet, so packages were only built, not validated."
-            exit 0
-          fi
-          for f in packages/*/manifest.json; do
-            [ -e "$f" ] || continue
-            check-jsonschema --schemafile "$schema/manifest.schema.json" "$f"
+          mkdir -p /tmp/folio && cd /tmp/folio
+          git init -q && git remote add origin https://github.com/McCal-Codes/folio.git
+          git fetch -q --depth 1 origin "$FOLIO_SHA" && git checkout -q FETCH_HEAD
+          echo "$FOLIO_PKG_SHA256  tools/folio-pkg.py" | sha256sum -c -
+
+      - name: House rules
+        run: python3 tools/check-submission.py
+
+      - name: Check each package with Folio's own validator
+        # Each package is checked on its own: its pictures live in its folder, as the template's do.
+        run: |
+          status=0
+          for dir in packages/*/; do
+            [ -d "$dir" ] || continue
+            tmp=$(mktemp -d)
+            cp -r "$dir" "$tmp/"
+            FOLIO_SCHEMAS=/tmp/folio/docs/sdk/schema/v1 python3 /tmp/folio/tools/folio-pkg.py validate "$tmp/$(basename "$dir")" || status=1
           done
-          for f in packages/*/depiction.json; do
-            [ -e "$f" ] || continue
-            check-jsonschema --schemafile "$schema/depiction.schema.json" "$f"
-          done
-          check-jsonschema --schemafile "$schema/index.schema.json" site/index.json
+          exit $status
+
+      - name: Check the template still passes
+        run: FOLIO_SCHEMAS=/tmp/folio/docs/sdk/schema/v1 python3 /tmp/folio/tools/folio-pkg.py validate template/hello-tweak
 
       - name: Upload the site
         if: github.ref == 'refs/heads/main'
@@ -88,6 +95,15 @@ jobs:
           python3 tools/build.py --key key.pem
           rm -f key.pem
 
+      - name: Check the signed site with Folio's own validator
+        if: steps.sign.outputs.skip != 'true'
+        run: |
+          mkdir -p /tmp/folio && cd /tmp/folio
+          git init -q && git remote add origin https://github.com/McCal-Codes/folio.git
+          git fetch -q --depth 1 origin 5bb87e66c9bcf9d0ae1324f5f6a9aa764c4c40ab && git checkout -q FETCH_HEAD
+          cd "$GITHUB_WORKSPACE"
+          FOLIO_SCHEMAS=/tmp/folio/docs/sdk/schema/v1 python3 /tmp/folio/tools/folio-pkg.py validate site
+
       - uses: actions/configure-pages@v5
         if: steps.sign.outputs.skip != 'true'
       - uses: actions/upload-pages-artifact@v3
@@ -97,3 +113,17 @@ jobs:
       - id: deploy
         if: steps.sign.outputs.skip != 'true'
         uses: actions/deploy-pages@v4
+
+  # GitHub turns scheduled workflows off after 60 days with no repository activity, and the weekly rebuild would stop
+  # with it: the index would pass its maxAge and Folio would refuse the source. Re-enabling through the API resets that
+  # clock without a commit. This job holds no secrets and can't touch the repository's contents.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the weekly rebuild scheduled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/publish.yml/enable"
