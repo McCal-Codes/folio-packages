@@ -14,6 +14,9 @@ Market → Sources → **Add a source**, and paste:
 https://mccal-codes.github.io/folio-packages/
 ```
 
+> **Not published yet.** This source has no signing key and no packages yet, so that address doesn't work for now.
+> Folio refuses an unsigned source, so nothing is served until the key exists. This note goes once it's live.
+
 Folio shows the source's key fingerprint before it trusts it, and pins that key from then on. The Market is in Folio
 0.7.0; on an earlier release, every theme and tweak it hands out is already in Settings.
 
